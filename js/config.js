@@ -3,12 +3,14 @@
 
 const CONFIG = {
   // ─────────────────────────────────────────────────────────────────────
-  // ▶▶ PASTE YOUR REAL QUALTRICS LINK HERE ◀◀
-  // (Qualtrics → Distributions → Anonymous link.)
-  // While the value still contains "REPLACE-ME", the closing screen shows
-  // a visible warning so a placeholder can never slip into a live session.
+  // The Qualtrics survey link participants use — this must be the
+  // ANONYMOUS link (Qualtrics → Distributions → Anonymous link), never a
+  // /jfe/preview/ link: preview responses are flagged by Qualtrics and
+  // excluded from the real dataset. The survey must be Published/Active.
+  // If this ever contains "REPLACE-ME", the closing screen shows a
+  // facilitator warning instead of the QR code.
   // ─────────────────────────────────────────────────────────────────────
-  QUALTRICS_URL: 'https://REPLACE-ME.qualtrics.com/jfe/form/SV_XXXXXXXXXXX',
+  QUALTRICS_URL: 'https://survey.uu.nl/jfe/form/SV_8B6Voi3xTAFtOqG',
 
   // The team code is appended to the survey link as ?team_code=XK4-92F.
   // If you add an Embedded Data field called "team_code" to your Qualtrics
