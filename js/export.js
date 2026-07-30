@@ -34,7 +34,35 @@ function memberExportRow(team, m) {
   return row;
 }
 
-function buildExportData(team, designData, evalData) {
+// Raw design-data key → export field name (B1–B5, the prompt-bearing
+// fields). Shared by the design/design_v1/design_v2 blocks and the
+// changed_fields diff so they always speak the same names.
+const DESIGN_EXPORT_KEYS = {
+  'B1.name': 'gpt_name',
+  'B1.role': 'b1_role',
+  'B1.humanRole': 'b1_human_role',
+  'B2.groundRules': 'b2_ground_rules',
+  'B2.mistakes': 'b2_mistakes',     // pilot-era; empty in new sessions
+  'B2.limits': 'b2_limits',         // pilot-era; empty in new sessions
+  'B3.opener': 'b3_opener',
+  'B4.format': 'b4_format',
+  'B4.mustInclude': 'b4_must_include',
+  'B5.tone': 'b5_tone',
+  'B5.jargon': 'b5_jargon',
+};
+
+// Map a raw designData snapshot to export-named B1–B5 fields.
+function designSnapshotExport(snapshot) {
+  if (!snapshot) return null;
+  const out = {};
+  Object.entries(DESIGN_EXPORT_KEYS).forEach(([raw, name]) => {
+    out[name] = ((snapshot[raw] ?? '') + '').trim();
+  });
+  return out;
+}
+
+function buildExportData(team, designData, evalData, extras) {
+  const x = extras || {};
   const members = team.members.filter(m => m.type);
   const counts = {};
   ROLE_GROUPS.forEach(g => counts[g.name] = 0);
@@ -43,6 +71,7 @@ function buildExportData(team, designData, evalData) {
   const d = (k) => (designData[k] || '').trim();
   const roles = designData['B6.primaryRoles'] || [];
   const selected = evalData.selected || ['A'];
+  const part1 = x.part1Data || {};
 
   return {
     schema_version: CONFIG.EXPORT_SCHEMA_VERSION,
@@ -60,22 +89,27 @@ function buildExportData(team, designData, evalData) {
     },
     absent_role_groups: ROLE_GROUPS.filter(g => counts[g.name] === 0).map(g => g.name),
     members: team.members.map(m => memberExportRow(team, m)),
+    // Reserved for the Part 1 prediction step (deferred while the MBTI
+    // activity is under review); null keeps the schema stable.
+    part1_prediction: null,
+    part1_interpretation: {
+      surprise: ((part1.surprise ?? '') + '').trim(),
+      spread: ((part1.spread ?? '') + '').trim(),
+      strengths: ((part1.strengths ?? '') + '').trim(),
+    },
     design: {
-      gpt_name: d('B1.name'),
-      b1_role: d('B1.role'),
-      b1_human_role: d('B1.humanRole'),
-      b2_mistakes: d('B2.mistakes'),
-      b2_limits: d('B2.limits'),
-      b3_opener: d('B3.opener'),
-      b4_format: d('B4.format'),
-      b4_must_include: d('B4.mustInclude'),
-      b5_tone: d('B5.tone'),
-      b5_jargon: d('B5.jargon'),
+      ...designSnapshotExport(designData),
       b6_primary_roles: roles,
       b6_primary_roles_labels: roles.map(id => B6_OPTIONS.find(o => o.id === id)?.title).filter(Boolean),
       b6_other_role: d('B6.otherRole'),
     },
     system_prompt: buildPromptText(team, designData),
+    design_v1: designSnapshotExport(x.designV1),
+    prompt_v1: x.promptV1 ?? null,
+    design_v2: designSnapshotExport(x.designV2),
+    prompt_v2: x.promptV2 ?? null,
+    changed_fields: (x.changedFields || []).map(k => DESIGN_EXPORT_KEYS[k] || k),
+    no_change_rationale: x.noChangeRationale || '',
     evaluation: {
       selected_topics: selected,
       topics: EVAL_TOPICS.map(t => ({
@@ -116,14 +150,19 @@ function summaryMd(data) {
   L.push('Role groups: ' + ROLE_GROUPS.map(g => `${g.name} ${data.role_group_counts[g.name.toLowerCase()]}`).join(' · '));
   if (data.absent_role_groups.length) L.push(`Absent: ${data.absent_role_groups.join(', ')}`);
   L.push('');
+  const q = (label, v) => { L.push(`**${label}**`); L.push(''); L.push(v ? v : '_(not answered)_'); L.push(''); };
+  const p1 = data.part1_interpretation || {};
+  L.push('## Part 1 — team interpretation');
+  L.push('');
+  q('Surprising vs expected results', p1.surprise);
+  q('Spread vs clustering', p1.spread);
+  q('Strengths and gaps', p1.strengths);
   L.push('## Design canvas (Part 2)');
   L.push('');
-  const q = (label, v) => { L.push(`**${label}**`); L.push(''); L.push(v ? v : '_(not answered)_'); L.push(''); };
   q('B1 · Name', data.design.gpt_name);
   q('B1 · Role for the team', data.design.b1_role);
   q('B1 · What stays a human job', data.design.b1_human_role);
-  q('B2 · Handling mistakes', data.design.b2_mistakes);
-  q('B2 · What it should refuse', data.design.b2_limits);
+  q('B2 · Ground rules', data.design.b2_ground_rules || [data.design.b2_mistakes, data.design.b2_limits].filter(Boolean).join(' '));
   q('B3 · Opening message', data.design.b3_opener);
   q('B4 · Response format', data.design.b4_format);
   q('B4 · Every response must include', data.design.b4_must_include);
@@ -145,6 +184,24 @@ function summaryMd(data) {
       L.push('');
     }
   });
+  L.push('## Revision (Part 3, after testing)');
+  L.push('');
+  if (data.changed_fields.length) {
+    L.push(`Fields changed after testing: ${data.changed_fields.join(', ')}`);
+  } else if (data.no_change_rationale) {
+    L.push(`No changes — team's rationale: "${data.no_change_rationale}"`);
+  } else {
+    L.push('_(no revision data recorded)_');
+  }
+  L.push('');
+  if (data.prompt_v1 && data.prompt_v1 !== data.prompt_v2) {
+    L.push('### Prompt v1 (as first tested)');
+    L.push('');
+    L.push('```');
+    L.push(data.prompt_v1);
+    L.push('```');
+    L.push('');
+  }
   L.push('## Final system prompt');
   L.push('');
   L.push('```');
@@ -183,6 +240,8 @@ function ExportScreen({ team, designData, evalData, extras, exported, onExported
   const [confirmSkip, setConfirmSkip] = React.useState(false);
   const data = React.useMemo(() => buildExportData(team, designData, evalData, extras), [team, designData, evalData, extras]);
   const files = React.useMemo(() => exportFiles(data), [data]);
+  // Exposed for testing/debugging (facilitator console); nothing leaves the page.
+  window.__exportData = data;
 
   const downloadJson = () => {
     downloadBlob(files.json.name, new Blob([files.json.text], { type: files.json.mime }));

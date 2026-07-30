@@ -23,8 +23,8 @@ const CONFIG = {
 
   // Stamped into every export file, so you can trace which version of the
   // platform produced which data.
-  WORKSHOP_VERSION: '1.0.0',
-  EXPORT_SCHEMA_VERSION: '1.0',
+  WORKSHOP_VERSION: '2.0.0',
+  EXPORT_SCHEMA_VERSION: '1.1',
 };
 
 Object.assign(window, { CONFIG });
