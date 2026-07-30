@@ -283,10 +283,26 @@ function Footer() {
 function DimensionBar({ dim, members }) {
   // Each marker sits at the member's 0–100 position between the two poles
   // (see the convention note at the top of this file); the red marker is
-  // the team average of those positions.
-  const positions = members.filter(m => m.dims && m.dims[dim.key] != null).map(m => m.dims[dim.key]);
+  // the team average of those positions. The average is printed inline in
+  // the row header (not as a hover tooltip — the workshop may run on touch
+  // screens), and every member marker carries its visible M-code label.
+  const withDims = members.filter(m => m.dims && m.dims[dim.key] != null);
+  const positions = withDims.map(m => m.dims[dim.key]);
   const avg = positions.length ? positions.reduce((a,b) => a+b, 0) / positions.length : null;
   const avgReading = avg != null ? poleReading(dim, Math.round(avg)) : null;
+
+  // Stagger labels of close-together markers between a lower and an upper
+  // row inside the track so every label stays readable without hovering.
+  const LABEL_GAP = 4; // min distance (in track %) between labels in a row
+  const labelRow = {};
+  const lastInRow = { 0: -Infinity, 1: -Infinity };
+  [...withDims].sort((a, b) => a.dims[dim.key] - b.dims[dim.key]).forEach(m => {
+    const p = m.dims[dim.key];
+    const row = (p - lastInRow[0] >= LABEL_GAP) ? 0 : (p - lastInRow[1] >= LABEL_GAP) ? 1
+      : (lastInRow[0] <= lastInRow[1] ? 0 : 1); // both crowded: least-recent row
+    labelRow[m.id] = row;
+    lastInRow[row] = p;
+  });
 
   return (
     <div className="dim">
@@ -295,7 +311,15 @@ function DimensionBar({ dim, members }) {
           {dim.left}
           <span className="pct">({dim.leftLetter})</span>
         </div>
-        <span className="dim-name">{dim.name}</span>
+        <span className="dim-name">
+          {dim.name}
+          {avgReading && (
+            <span className="dim-avg">
+              {' · team average '}
+              {avgReading.side ? `${avgReading.pct}% ${avgReading.name}` : '50 / 50'}
+            </span>
+          )}
+        </span>
         <div className="dim-pole">
           {dim.right}
           <span className="pct">({dim.rightLetter})</span>
@@ -303,27 +327,31 @@ function DimensionBar({ dim, members }) {
       </div>
       <div className="dim-track" style={{marginTop: 14}}>
         <span className="midline" />
-        {members.filter(m => m.dims && m.dims[dim.key] != null).map(m => {
+        {withDims.map(m => {
           const r = poleReading(dim, m.dims[dim.key]);
+          const pos = m.dims[dim.key];
           return (
-            <span
-              key={m.id}
-              className="marker"
-              style={{
-                left: `${m.dims[dim.key]}%`,
-                opacity: .65,
-                background: 'var(--ink-soft)',
-                width: 8, height: 8
-              }}
-              title={`${m.name}: ${r.pct}% ${r.name}`}
-            />
+            <React.Fragment key={m.id}>
+              <span
+                className="marker"
+                style={{
+                  left: `${pos}%`,
+                  opacity: .65,
+                  background: 'var(--ink-soft)',
+                  width: 8, height: 8
+                }}
+                title={`${memberShort(m)}: ${r.side ? `${r.pct}% ${r.name}` : '50 / 50'}`}
+              />
+              <span
+                className={`marker-label ${labelRow[m.id] === 1 ? 'row-upper' : 'row-lower'}`}
+                style={{left: `${Math.max(2.5, Math.min(97.5, pos))}%`}}
+              >{memberShort(m)}</span>
+            </React.Fragment>
           );
         })}
         {avg != null && (
           <span className="marker team" style={{left: `${avg}%`}}
-            title={avgReading.side ? `Team average: ${avgReading.pct}% ${avgReading.name}` : 'Team average: neutral'}>
-            <span className="tip">team avg {Math.round(avg)}</span>
-          </span>
+            title={avgReading.side ? `Team average: ${avgReading.pct}% ${avgReading.name}` : 'Team average: 50 / 50'} />
         )}
       </div>
     </div>

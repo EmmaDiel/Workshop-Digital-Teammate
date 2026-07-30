@@ -1,6 +1,6 @@
 // === Team profile screen (Part 1) ===
 
-function TeamProfileScreen({ team, onContinue, onEditMember }) {
+function TeamProfileScreen({ team, part1Data, onPart1Change, onContinue, onEditMember }) {
   const members = team.members.filter(m => m.type);
 
   // Count by role group
@@ -20,7 +20,7 @@ function TeamProfileScreen({ team, onContinue, onEditMember }) {
           <Eyebrow>Part 1 · Get to know your team roles</Eyebrow>
           <h1 className="h-display mt-4">Your team's <em>composition</em>.</h1>
           <p className="lede mt-4">
-            {members.length} members across {ROLE_GROUPS.filter(g => counts[g.name] > 0).length} role groups. The corners that are weak or absent are where your CustomGPT can do the most work.
+            {members.length} members across {ROLE_GROUPS.filter(g => counts[g.name] > 0).length} role groups. Take it in together — then talk through what you see and record your team's reading below.
           </p>
         </div>
         <div style={{textAlign: 'right'}}>
@@ -143,7 +143,7 @@ function TeamProfileScreen({ team, onContinue, onEditMember }) {
           <div>
             <div className="section-num">Step B · Five dimension map</div>
             <h2 className="h2 mt-2">Where your team sits on each continuum</h2>
-            <div className="helper mt-2">Small grey dots are individual scores. The red marker is your team average.</div>
+            <div className="helper mt-2">Each grey dot is one member (M1, M2, …). The red marker is your team average.</div>
           </div>
           <div style={{display:'flex', gap:10, alignItems:'center'}}>
             <span className="marker-inline" style={{
@@ -160,34 +160,56 @@ function TeamProfileScreen({ team, onContinue, onEditMember }) {
         ))}
       </div>
 
-      {/* === Row 4: insights & next === */}
-      <div className="card-bare mt-8">
-        <div className="grid-2" style={{gridTemplateColumns: '1fr 1fr', gap: 32}}>
+      {/* === Row 4: guided interpretation (2.1) — the team reads its own
+           profile; the site no longer interprets it for them. === */}
+      <div className="card mt-8">
+        <div className="card-head">
           <div>
-            <div className="section-num">Step C · What this means</div>
-            <h2 className="h2 mt-2">Your likely blind spots</h2>
-            <p className="helper mt-4" style={{fontSize: 14}}>
-              {absent.length > 0
-                ? <>Your team has no <b style={{color: 'var(--ink)'}}>{absent.join(', ')}</b> — typical frictions are {absent.includes('Analysts') && 'lack of structured critique'}
-                  {absent.includes('Sentinels') && 'thin follow-through on plans'}
-                  {absent.includes('Diplomats') && 'team conflicts going unsurfaced'}
-                  {absent.includes('Explorers') && 'a tendency to overplan instead of trying things'}.
-                  Your CustomGPT can compensate for these.</>
-                : <>You have coverage across all four corners — your CustomGPT should <b style={{color:'var(--ink)'}}>amplify your existing strengths</b> rather than fill gaps.</>}
+            <div className="section-num">Step C · Interpret it together</div>
+            <h2 className="h2 mt-2">What do you see?</h2>
+            <p className="lede mt-2" style={{fontSize: 15}}>
+              Discuss each question as a team, then have one person record your shared answer. A few sentences each is plenty.
             </p>
           </div>
+        </div>
+        <PrivacyNote />
+        <div className="stack-lg mt-2">
+          {PART1_QUESTIONS.map(q => (
+            <div className="field" key={q.id}>
+              <label>{q.label}</label>
+              <textarea
+                className="textarea" rows={3}
+                value={(part1Data && part1Data[q.id]) || ''}
+                onChange={e => onPart1Change({ ...(part1Data || {}), [q.id]: e.target.value })}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* === Row 5: next === */}
+      <div className="card-bare mt-8">
+        <div className="between">
           <div>
             <div className="section-num">Ready when you are</div>
             <h2 className="h2 mt-2">Move to Part 2 together</h2>
             <p className="helper mt-4" style={{fontSize: 14}}>From here, everything is collaborative — one shared canvas for the whole team. Confirm with your teammates that everyone is in the same view before you proceed.</p>
-            <button className="btn btn-dark btn-lg mt-4" onClick={onContinue}>
-              Continue to Part 2 — Design the teammate
-            </button>
           </div>
+          <button className="btn btn-dark btn-lg" style={{flexShrink: 0, marginLeft: 32}} onClick={onContinue}>
+            Continue to Part 2 — Design the teammate
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-Object.assign(window, { TeamProfileScreen });
+// The three Part 1 interpretation questions (2.1). Ids double as export
+// keys inside part1_interpretation — change them only with a schema bump.
+const PART1_QUESTIONS = [
+  { id: 'surprise',  label: 'Which result surprised you — your own, or a teammate\'s? And which was exactly what you expected?' },
+  { id: 'spread',    label: 'Where is your team most spread out, and where do you cluster together? What might that mean for how you work?' },
+  { id: 'strengths', label: 'Looking at your team\'s profile — what do you see as your strengths, and where do you think the gaps are?' },
+];
+
+Object.assign(window, { TeamProfileScreen, PART1_QUESTIONS });

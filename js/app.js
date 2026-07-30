@@ -59,9 +59,14 @@ function demoState() {
     'B2.limits': 'Never agree just to keep the conversation pleasant. Never produce a final deliverable. Always ask one clarifying question before answering vague briefs.',
     'B6.primaryRoles': ['debate'],
   };
+  const part1Data = {
+    surprise: 'M2 expected a different result for M4; the rest matched expectations.',
+    spread: 'Most spread on Energy, clustered on Mind.',
+    strengths: 'Strong on ideas and planning; follow-through is thinner.',
+  };
   return {
     step: 'profile', mbView: 'input', activeMemberId: null, editReturn: null,
-    team, designData, evalData: { selected: ['A'] }, exported: false,
+    team, designData, part1Data, evalData: { selected: ['A'] }, exported: false,
     furthestIdx: STEP_ORDER.indexOf('export'),
   };
 }
@@ -69,7 +74,8 @@ function demoState() {
 function initialState() {
   return {
     step: 'landing', mbView: 'input', activeMemberId: null, editReturn: null,
-    team: freshTeam(), designData: {}, evalData: { selected: ['A'] }, exported: false,
+    team: freshTeam(), designData: {}, part1Data: { surprise: '', spread: '', strengths: '' },
+    evalData: { selected: ['A'] }, exported: false,
     furthestIdx: 0,
   };
 }
@@ -79,7 +85,7 @@ function App() {
     new URLSearchParams(window.location.search).has('demo') ? demoState() : initialState());
   const [savedSession, setSavedSession] = useState(() => loadSession());
 
-  const { step, mbView, activeMemberId, editReturn, team, designData, evalData, exported, furthestIdx } = state;
+  const { step, mbView, activeMemberId, editReturn, team, designData, part1Data, evalData, exported, furthestIdx } = state;
 
   const patch = (p) => setState(s => {
     const next = { ...s, ...p };
@@ -245,6 +251,8 @@ function App() {
         {step === 'profile' && (
           <TeamProfileScreen
             team={team}
+            part1Data={part1Data}
+            onPart1Change={(d) => patch({ part1Data: d })}
             onContinue={() => goTo('design')}
             onEditMember={handleEditMember}
           />
