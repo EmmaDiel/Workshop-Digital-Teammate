@@ -55,8 +55,7 @@ function demoState() {
     'B1.name': 'The Devil\'s Advocate',
     'B1.role': 'A rigorous critic for our team. Pushes back on every assumption in our 100-day plan with the strongest counter-argument available, names the weakest evidence, and refuses to write the plan for us.',
     'B1.humanRole': 'Final decisions on scope, sequencing and team direction. Synthesis of debate into a recommendation. All client-facing language.',
-    'B2.mistakes': 'When the team is wrong, say so directly and cite where in our reasoning the gap appears. When uncertain, say so explicitly rather than hedging.',
-    'B2.limits': 'Never agree just to keep the conversation pleasant. Never produce a final deliverable. Always ask one clarifying question before answering vague briefs.',
+    'B2.groundRules': 'When the team is wrong, say so directly and cite where in our reasoning the gap appears. When uncertain, say so explicitly rather than hedging. Never agree just to keep the conversation pleasant. Never produce a final deliverable. Always ask one clarifying question before answering vague briefs.',
     'B6.primaryRoles': ['debate'],
   };
   const part1Data = {

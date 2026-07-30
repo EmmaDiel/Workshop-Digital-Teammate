@@ -401,9 +401,9 @@ function ExportScreen({ team, designData, evalData, exported, onExported, onCont
 
   // Readiness checklist (informational — nothing is blocked)
   const membersDone = team.members.filter(m => m.type).length;
-  const totalQs = DESIGN_SECTIONS.reduce((a, s) => a + s.questions.filter(q => q.kind !== 'checks').length, 0);
+  const totalQs = DESIGN_SECTIONS.reduce((a, s) => a + countedQuestions(s).filter(q => q.kind !== 'checks').length, 0);
   const filledQs = DESIGN_SECTIONS.reduce((a, s) =>
-    a + s.questions.filter(q => q.kind !== 'checks' && (designData[`${s.id}.${q.id}`] || '').trim().length > 4).length, 0);
+    a + countedQuestions(s).filter(q => q.kind !== 'checks' && questionFilled(designData, s.id, q)).length, 0);
   const b6Picked = (designData['B6.primaryRoles'] || []).length > 0;
   const selectedTopics = data.evaluation.selected_topics;
   const topicsWithNotes = data.evaluation.topics.filter(t => t.selected && (t.observation || t.refinement)).length;

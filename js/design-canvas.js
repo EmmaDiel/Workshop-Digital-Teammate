@@ -5,7 +5,7 @@ const DESIGN_SECTIONS = [
     id: 'B1',
     title: 'Purpose & Role',
     kicker: 'Section B1',
-    intro: 'Given your role group mix, what is the single most useful thing an AI teammate could do for your team specifically?',
+    intro: 'Given your role group mix, what should an AI teammate do for your team specifically?',
     questions: [
       {
         id: 'name',
@@ -34,18 +34,15 @@ const DESIGN_SECTIONS = [
     id: 'B2',
     title: 'Ground Rules',
     kicker: 'Section B2',
-    intro: 'A ground rule shapes how your CustomGPT behaves in general. How should it handle mistakes — blunt correction, gentle guidance, leading questions?',
+    intro: 'A ground rule shapes how your CustomGPT behaves in general.',
     questions: [
       {
-        id: 'mistakes',
-        label: 'How should it handle mistakes — yours or its own?',
-        placeholder: 'e.g. When the team is wrong, say so directly and explain the gap. When uncertain, say so...',
-        kind: 'long',
-      },
-      {
-        id: 'limits',
-        label: 'What should it refuse to do?',
-        placeholder: 'e.g. Never write final deliverables for us. Never agree just to keep the conversation pleasant...',
+        // Merged question (3.4) — stored under its own key; the old
+        // 'mistakes'/'limits' keys remain in the export schema for
+        // continuity with pilot data.
+        id: 'groundRules',
+        label: 'What are its ground rules — how should it handle being wrong, and what should it refuse to do or push back on?',
+        placeholder: 'e.g. When the team is wrong, say so directly and explain the gap. When uncertain, say so. Never write final deliverables for us. Never agree just to keep the conversation pleasant...',
         kind: 'long',
       },
     ],
@@ -68,17 +65,18 @@ const DESIGN_SECTIONS = [
     id: 'B4',
     title: 'Output Specification',
     kicker: 'Section B4',
-    intro: 'Analysts may want detailed reasoning; Diplomats may prefer narrative; Sentinels want checklists. What format serves most of your team?',
+    intro: 'Decide what your teammate\'s responses should look like — and what they must always contain.',
     questions: [
       {
         id: 'format',
-        label: 'What format should responses take?',
+        label: 'What format should responses take — and how long is "too long" for your team?',
+        hint: 'And when an answer would run long: what should the digital teammate do instead?',
         placeholder: 'e.g. Bullets for decisions, prose for reasoning, max 200 words unless asked otherwise...',
         kind: 'long',
       },
       {
         id: 'mustInclude',
-        label: 'What must every response include?',
+        label: 'What content types should every response include to push your team further?',
         placeholder: 'e.g. At least one reflection question. One critical pushback. A source suggestion when claims are made...',
         kind: 'long',
       },
@@ -128,6 +126,7 @@ const DESIGN_SECTIONS = [
         label: 'Something else — describe it',
         placeholder: 'Optional — what role does this team actually need?',
         kind: 'short',
+        optional: true,   // captured if used, but never counted toward completion (3.6)
       },
     ],
   },
@@ -142,7 +141,6 @@ const B6_OPTIONS = DESIGN_SECTIONS.find(s => s.id === 'B6').questions[0].options
 
 function buildPromptLines(team, designData) {
   const g = (k) => designData[k] || '';
-  const checks = designData['B6.primaryRoles'] || [];
 
   const lines = [];
   const name = g('B1.name') || 'Our Digital Teammate';
@@ -151,18 +149,21 @@ function buildPromptLines(team, designData) {
 
   if (g('B1.role'))      lines.push(`__h4__Role`, g('B1.role'));
   if (g('B1.humanRole')) lines.push(`__h4__What stays with humans`, g('B1.humanRole'));
-  if (g('B2.mistakes'))  lines.push(`__h4__Ground rules`, '• ' + g('B2.mistakes'));
-  if (g('B2.limits'))    lines.push('• ' + g('B2.limits'));
+  if (g('B2.groundRules')) {
+    lines.push(`__h4__Ground rules`, g('B2.groundRules'));
+  } else if (g('B2.mistakes') || g('B2.limits')) {
+    // Legacy sessions saved before B2 was merged into one question.
+    lines.push(`__h4__Ground rules`);
+    if (g('B2.mistakes')) lines.push('• ' + g('B2.mistakes'));
+    if (g('B2.limits'))   lines.push('• ' + g('B2.limits'));
+  }
   if (g('B3.opener'))    lines.push(`__h4__Opening message`, g('B3.opener'));
   if (g('B4.format'))    lines.push(`__h4__Output format`, g('B4.format'));
   if (g('B4.mustInclude')) lines.push('Every reply must include: ' + g('B4.mustInclude'));
   if (g('B5.tone'))      lines.push(`__h4__Tone & language`, g('B5.tone'));
   if (g('B5.jargon'))    lines.push('Jargon: ' + g('B5.jargon'));
-  if (checks.length || g('B6.otherRole')) {
-    const labels = checks.map(c => B6_OPTIONS.find(o => o.id === c)?.title);
-    if (g('B6.otherRole')) labels.push(g('B6.otherRole'));
-    lines.push(`__h4__Primary function`, labels.filter(Boolean).map(l => '• ' + l).join('\n'));
-  }
+  // B6 is a reflection instrument, not a behavioural instruction (3.6):
+  // it is captured in the export but never assembled into the prompt.
   return lines;
 }
 
@@ -173,8 +174,29 @@ function buildPromptText(team, designData) {
     .join('\n');
 }
 
+// A question counts toward completion unless it's optional (3.6); checks
+// count when at least one option is ticked, text when meaningfully filled.
+function questionFilled(designData, sectionId, q) {
+  const v = designData[`${sectionId}.${q.id}`];
+  if (q.kind === 'checks') return (v || []).length > 0;
+  return ((v ?? '') + '').trim().length > 4;
+}
+function countedQuestions(section) {
+  return section.questions.filter(q => !q.optional);
+}
+
 function DesignScreen({ team, designData, onChange, onContinue }) {
   const [active, setActive] = React.useState('B1');
+  // Soft empty-field reminders (3.7): purely informational, per-section
+  // dismissible, never blocking. The nav only flags blanks in sections the
+  // team has already moved on from — an untouched section ahead isn't "missed".
+  const [dismissedReminders, setDismissedReminders] = React.useState({});
+  const [visited, setVisited] = React.useState({});
+
+  const goToSection = (id) => {
+    setVisited(v => ({ ...v, [active]: true }));
+    setActive(id);
+  };
 
   const updateAnswer = (sectionId, qId, value) => {
     onChange({ ...designData, [`${sectionId}.${qId}`]: value });
@@ -183,17 +205,19 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
 
   const activeSection = DESIGN_SECTIONS.find(s => s.id === active);
 
-  // Completion progress
-  const totalQs = DESIGN_SECTIONS.reduce((a, s) => a + s.questions.filter(q => q.kind !== 'checks').length, 0);
+  // Completion progress (optional questions never counted)
+  const totalQs = DESIGN_SECTIONS.reduce((a, s) => a + countedQuestions(s).filter(q => q.kind !== 'checks').length, 0);
   const filledQs = DESIGN_SECTIONS.reduce((a, s) =>
-    a + s.questions.filter(q => q.kind !== 'checks' && getAnswer(s.id, q.id).trim().length > 4).length, 0);
+    a + countedQuestions(s).filter(q => q.kind !== 'checks' && questionFilled(designData, s.id, q)).length, 0);
+
+  const blankInActive = countedQuestions(activeSection).filter(q => !questionFilled(designData, active, q));
+  const showReminder = blankInActive.length > 0 && !dismissedReminders[active];
 
   // Members composition snapshot for the side rail
   const members = team.members.filter(m => m.type);
   const counts = {};
   ROLE_GROUPS.forEach(g => counts[g.name] = 0);
   members.forEach(m => { counts[getGroup(m.type)]++; });
-  const absent = Object.keys(counts).filter(g => counts[g] === 0);
 
   return (
     <div className="container-wide fade-in" data-screen-label="design">
@@ -217,13 +241,11 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
           <div className="section-num" style={{marginBottom: 12}}>Sections</div>
           {DESIGN_SECTIONS.map(s => {
             const isActive = active === s.id;
-            const filled = s.questions.filter(q => {
-              if (q.kind === 'checks') return (designData[`${s.id}.${q.id}`] || []).length > 0;
-              return getAnswer(s.id, q.id).trim().length > 4;
-            }).length;
-            const total = s.questions.length;
+            const counted = countedQuestions(s);
+            const filled = counted.filter(q => questionFilled(designData, s.id, q)).length;
+            const total = counted.length;
             return (
-              <button key={s.id} onClick={() => setActive(s.id)} style={{
+              <button key={s.id} onClick={() => goToSection(s.id)} style={{
                 textAlign: 'left',
                 padding: '12px 14px',
                 borderRadius: 8,
@@ -236,7 +258,13 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
                   color: isActive ? 'var(--accent)' : 'var(--ink-mute)'
                 }}>{s.kicker}</span>
                 <span style={{fontSize: 14, color: isActive ? 'var(--ink)' : 'var(--ink-soft)', fontWeight: isActive ? 500 : 400}}>{s.title}</span>
-                <span style={{fontSize: 11, color: 'var(--ink-mute)', fontFamily: 'var(--font-mono)'}}>{filled}/{total}</span>
+                <span style={{fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: visited[s.id] && filled < total ? 'var(--explorers)' : 'var(--ink-mute)'}}
+                  title={visited[s.id] && filled < total
+                    ? 'Still blank: ' + counted.filter(q => !questionFilled(designData, s.id, q)).map(q => q.label).join(' · ')
+                    : undefined}>
+                  {filled}/{total}{visited[s.id] && filled < total ? ' ·' : ''}
+                </span>
               </button>
             );
           })}
@@ -260,12 +288,6 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
               </div>
             ))}
           </div>
-          {absent.length > 0 && (
-            <div className="tip-callout" style={{marginTop: 12, fontSize: 12, padding: '10px 12px'}}>
-              <span className="tip-mark" style={{fontSize: 9}}>Gap</span>
-              <div>Compensating for {absent.join(' & ')} is a strong design direction for this team.</div>
-            </div>
-          )}
         </aside>
 
         {/* === Active section form === */}
@@ -291,13 +313,25 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
             ))}
           </div>
 
+          {showReminder && (
+            <div className="soft-reminder mt-6" role="status">
+              <span>
+                {blankInActive.length === 1 ? 'One answer' : `${blankInActive.length} answers`} in this
+                section {blankInActive.length === 1 ? 'is' : 'are'} still blank — fine to move on, you
+                can come back any time via the section list.
+              </span>
+              <button className="dismiss" aria-label="Dismiss reminder"
+                onClick={() => setDismissedReminders(d => ({ ...d, [active]: true }))}>✕</button>
+            </div>
+          )}
+
           <div className="between mt-8" style={{paddingTop: 24, borderTop: '1px solid var(--line)'}}>
             <button
               className="btn btn-ghost"
               disabled={DESIGN_SECTIONS.findIndex(s => s.id === active) === 0}
               onClick={() => {
                 const i = DESIGN_SECTIONS.findIndex(s => s.id === active);
-                if (i > 0) setActive(DESIGN_SECTIONS[i - 1].id);
+                if (i > 0) goToSection(DESIGN_SECTIONS[i - 1].id);
               }}
             >← Previous</button>
             {DESIGN_SECTIONS.findIndex(s => s.id === active) < DESIGN_SECTIONS.length - 1 ? (
@@ -305,7 +339,7 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
                 className="btn btn-primary"
                 onClick={() => {
                   const i = DESIGN_SECTIONS.findIndex(s => s.id === active);
-                  setActive(DESIGN_SECTIONS[i + 1].id);
+                  goToSection(DESIGN_SECTIONS[i + 1].id);
                 }}
               >Next section <span className="arrow">→</span></button>
             ) : (
@@ -402,4 +436,4 @@ function PromptPreview({ team, designData, big }) {
   );
 }
 
-Object.assign(window, { DesignScreen, DESIGN_SECTIONS, B6_OPTIONS, PromptPreview, buildPromptLines, buildPromptText });
+Object.assign(window, { DesignScreen, DESIGN_SECTIONS, B6_OPTIONS, PromptPreview, buildPromptLines, buildPromptText, questionFilled, countedQuestions });

@@ -264,7 +264,7 @@ function PrivacyNote() {
   return (
     <div className="privacy-note" role="note">
       Please keep names and other identifying details out of your answers —
-      here your team is simply <b>Team</b> and members are numbered.
+      your team is identified by its team code, and members by their numbers (M1, M2, …).
     </div>
   );
 }

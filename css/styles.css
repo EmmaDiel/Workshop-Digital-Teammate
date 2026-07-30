@@ -833,6 +833,20 @@ h1, h2, h3, h4 { margin: 0; font-weight: 500; }
   border-color: var(--bg-card);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+/* Soft empty-field reminder (Part 2) — informational, dismissible, never blocking */
+.soft-reminder {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 12px; color: var(--ink-soft);
+  background: var(--bg-tint);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+.soft-reminder .dismiss {
+  color: var(--ink-mute); font-size: 11px; padding: 2px 4px; flex-shrink: 0;
+}
+.soft-reminder .dismiss:hover { color: var(--ink); }
+
 .dim-name .dim-avg {
   color: var(--ink-soft);
   text-transform: none;
