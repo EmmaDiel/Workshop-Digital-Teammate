@@ -88,7 +88,7 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
         </div>
         <div style={{textAlign: 'right'}}>
           <button className="btn btn-primary btn-lg" onClick={onContinue}>
-            See refined prompt <span className="arrow">→</span>
+            Revise your prompt <span className="arrow">→</span>
           </button>
         </div>
       </div>
@@ -244,7 +244,7 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
               }}
             >
               {EVAL_TOPICS.findIndex(t => t.id === activeId) === EVAL_TOPICS.length - 1
-                ? 'See refined prompt'
+                ? 'Revise your prompt'
                 : 'Next topic'} <span className="arrow">→</span>
             </button>
           </div>
@@ -299,36 +299,97 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
   );
 }
 
-// === Refined prompt screen (between evaluate & export) ===
-function PromptOutputScreen({ team, designData, evalData, onContinue }) {
+// === Revision screen (Part 3, after testing) — apply what testing taught ===
+// Teams edit their B1–B5 answers with their own refinement notes alongside
+// and the prompt preview updating live. To continue they either change at
+// least one field or explicitly record that no changes were needed (5.4) —
+// declining to revise is a finding, not a failure.
+function RevisionScreen({ team, designData, onChange, evalData, designV1, savedRationale, onContinue }) {
+  const [noChange, setNoChange] = React.useState(false);
+  const [rationale, setRationale] = React.useState(savedRationale || '');
+  const [needAction, setNeedAction] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+
   const refines = EVAL_TOPICS
     .filter(t => (evalData.selected || ['A']).includes(t.id))
     .map(t => ({ topic: t, text: evalData[`${t.id}.refine`] || '' }))
     .filter(r => r.text.trim().length > 0);
 
+  const sections = DESIGN_SECTIONS.filter(s => s.id !== 'B6');
+  const v1 = designV1 || {};
+  const editedKeys = sections.flatMap(s => s.questions.map(q => `${s.id}.${q.id}`))
+    .filter(k => ((designData[k] ?? '') + '') !== ((v1[k] ?? '') + ''));
+  const edited = editedKeys.length > 0;
+
+  const updateAnswer = (sectionId, qId, value) => {
+    onChange({ ...designData, [`${sectionId}.${qId}`]: value });
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(buildPromptText(team, designData));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      console.warn('Clipboard unavailable:', err);
+    }
+  };
+
+  const handleContinue = () => {
+    if (!edited && !noChange) { setNeedAction(true); return; }
+    onContinue({ rationale: noChange ? rationale : '' });
+  };
+
   return (
-    <div className="container fade-in" data-screen-label="prompt-output">
+    <div className="container-wide fade-in" data-screen-label="revise">
       <div className="between mb-6">
         <div>
-          <Eyebrow>Part 3 · Refined prompt</Eyebrow>
-          <h1 className="h-display mt-4">Your <em>final</em> CustomGPT brief.</h1>
-          <p className="lede mt-4">Copy this prompt into ChatGPT (Custom GPT or Project Instructions), Claude Projects, or any system-prompt field. You can iterate further with your team.</p>
-        </div>
-        <div style={{textAlign:'right'}}>
-          <button className="btn btn-primary btn-lg" onClick={onContinue}>
-            Save your team's work <span className="arrow">→</span>
-          </button>
+          <Eyebrow>Part 3 · Revise</Eyebrow>
+          <h1 className="h-display mt-4">Your <em>final</em> CustomGPT prompt.</h1>
+          <p className="lede mt-4">Use what testing taught you: edit any field below — the prompt on the right updates as you type. Then update your CustomGPT in EduGenAI so it actually runs the new version.</p>
         </div>
       </div>
 
-      <div className="grid-2" style={{gridTemplateColumns: '1.4fr 1fr', gap: 24, alignItems: 'flex-start'}}>
-        <div>
-          <PromptPreview team={team} designData={designData} big />
-          {refines.length > 0 && (
-            <div className="card mt-6">
-              <div className="section-num">Refinements logged in testing</div>
-              <h3 className="h2 mt-2" style={{fontSize: 18}}>Add these to your prompt before deploying</h3>
-              <div className="stack-md mt-6">
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 420px', gap: 24, alignItems: 'flex-start'}}>
+        {/* === Editable design fields (B1–B5) === */}
+        <main className="card">
+          <div className="card-head">
+            <div>
+              <div className="section-num">Revise your design</div>
+              <h2 className="h2 mt-2">All your answers, editable</h2>
+              <p className="helper mt-2" style={{fontSize: 13}}>B6 (your reflection) is recorded but isn't part of the prompt, so it isn't revised here.</p>
+            </div>
+            {edited && (
+              <span className="tag-mute" style={{color: 'var(--diplomats)'}}>
+                {editedKeys.length} field{editedKeys.length === 1 ? '' : 's'} changed
+              </span>
+            )}
+          </div>
+          <div className="stack-lg">
+            {sections.map(s => (
+              <div key={s.id}>
+                <div className="section-num" style={{marginBottom: 4}}>{s.kicker} · {s.title}</div>
+                <div className="stack-md">
+                  {s.questions.map(q => (
+                    <DesignQuestion
+                      key={q.id}
+                      q={q}
+                      value={designData[`${s.id}.${q.id}`] ?? ''}
+                      onChange={(v) => updateAnswer(s.id, q.id, v)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
+
+        {/* === Reference notes, live prompt, deploy & continue === */}
+        <aside className="stack-md">
+          <div className="card">
+            <div className="section-num">Your refinement notes from testing</div>
+            {refines.length > 0 ? (
+              <div className="stack-md mt-4">
                 {refines.map(r => (
                   <div key={r.topic.id} style={{borderLeft: '2px solid var(--accent)', paddingLeft: 16}}>
                     <div className="section-num">Topic {r.topic.code} · {r.topic.title}</div>
@@ -338,28 +399,53 @@ function PromptOutputScreen({ team, designData, evalData, onContinue }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-
-        <aside style={{position:'sticky', top: 160}} className="stack-md">
-          <div className="card">
-            <div className="section-num">Drop into</div>
-            <h3 className="h2 mt-2" style={{fontSize: 18}}>Where to deploy this prompt</h3>
-            <div className="stack-sm mt-4">
-              {['Custom GPT — System instructions', 'Claude Project — Custom instructions', 'Gemini Gem — Behaviour', 'Any system prompt field'].map(p => (
-                <div key={p} className="between" style={{padding: '10px 0', borderTop: '1px solid var(--line)'}}>
-                  <span style={{fontSize: 13}}>{p}</span>
-                  <span className="kbd">paste</span>
-                </div>
-              ))}
-            </div>
+            ) : (
+              <p className="helper mt-3" style={{fontSize: 13}}>You didn't note any refinements during testing. If testing changed your mind about anything, edit the fields directly.</p>
+            )}
           </div>
 
-          <div className="card-bare">
-            <div className="section-num">After deployment</div>
-            <h3 className="h2 mt-2" style={{fontSize: 18}}>Keep iterating</h3>
-            <p className="helper mt-3" style={{fontSize: 13}}>Run the same four testing topics every 2–3 weeks. Your prompt should evolve as your project evolves and as you learn how the AI behaves in real work.</p>
+          <div>
+            <div className="section-num mb-2">Live prompt — updates as you edit</div>
+            <PromptPreview team={team} designData={designData} />
+          </div>
+
+          <div className="card">
+            <div className="section-num">Before you continue</div>
+            <h3 className="h2 mt-2" style={{fontSize: 18}}>Update your CustomGPT in EduGenAI</h3>
+            <ol className="helper mt-3" style={{fontSize: 13, paddingLeft: 18, display: 'grid', gap: 6}}>
+              <li><b>Copy</b> the final prompt.</li>
+              <li>In <a href="https://edugenai.npuls.nl/" target="_blank" rel="noreferrer">EduGenAI</a>, open your CustomGPT and <b>replace its instructions</b> with the new version — otherwise it keeps running the old one.</li>
+            </ol>
+            <button className="btn btn-dark mt-4" style={{width: '100%'}} onClick={copyPrompt}>
+              {copied ? 'Copied ✓' : 'Copy final prompt'}
+            </button>
+
+            <div className="divider" />
+
+            {!edited && (
+              <button type="button" className={`check ${noChange ? 'checked' : ''}`}
+                role="checkbox" aria-checked={noChange}
+                onClick={() => { setNoChange(v => !v); setNeedAction(false); }}>
+                <div className="box" />
+                <div className="check-label">
+                  <div className="check-title">We reviewed our prompt and decided no changes were needed.</div>
+                  <div className="check-sub">Also a valid outcome — say briefly why below.</div>
+                </div>
+              </button>
+            )}
+            {!edited && noChange && (
+              <input className="input mt-3" value={rationale} placeholder="One line: why no changes?"
+                onChange={e => setRationale(e.target.value)} />
+            )}
+            {needAction && !edited && !noChange && (
+              <div className="helper mt-3" style={{color: 'var(--accent)', fontSize: 12}}>
+                Either edit at least one field above, or tick the box to record that your team reviewed the prompt and kept it as is.
+              </div>
+            )}
+
+            <button className="btn btn-primary btn-lg mt-4" style={{width: '100%'}} onClick={handleContinue}>
+              Save your team's work <span className="arrow">→</span>
+            </button>
           </div>
         </aside>
       </div>
@@ -367,4 +453,4 @@ function PromptOutputScreen({ team, designData, evalData, onContinue }) {
   );
 }
 
-Object.assign(window, { EvaluateScreen, PromptOutputScreen, EVAL_TOPICS });
+Object.assign(window, { EvaluateScreen, RevisionScreen, EVAL_TOPICS });

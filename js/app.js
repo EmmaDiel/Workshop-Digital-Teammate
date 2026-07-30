@@ -2,7 +2,7 @@
 const { useState, useEffect, useMemo } = React;
 
 // Internal step order (the visible stepper groups some of these).
-const STEP_ORDER = ['landing', 'setup', 'mb', 'profile', 'design', 'evaluate', 'output', 'export', 'done'];
+const STEP_ORDER = ['landing', 'setup', 'mb', 'profile', 'design', 'evaluate', 'revise', 'export', 'done'];
 
 // Map an internal step to the stepper/menu indicator id.
 function stepIndicatorId(step) {
@@ -13,12 +13,18 @@ function stepIndicatorId(step) {
     case 'profile':  return 'profile';
     case 'design':   return 'design';
     case 'evaluate':
-    case 'output':   return 'evaluate';
+    case 'revise':   return 'evaluate';
     case 'export':
     case 'done':     return 'finish';
     default:         return 'setup';
   }
 }
+
+// Design-data keys that make up the prompt (B1–B5; B6 is a reflection
+// instrument). Used for the v1/v2 revision diff.
+const PROMPT_FIELD_KEYS = () => DESIGN_SECTIONS
+  .filter(s => s.id !== 'B6')
+  .flatMap(s => s.questions.map(q => `${s.id}.${q.id}`));
 
 // Where the menu lands when jumping to an indicator id.
 const JUMP_TARGET = { setup: 'setup', mb: 'mb', profile: 'profile', design: 'design', evaluate: 'evaluate', finish: 'export' };
@@ -66,6 +72,8 @@ function demoState() {
   return {
     step: 'profile', mbView: 'input', activeMemberId: null, editReturn: null,
     team, designData, part1Data, evalData: { selected: ['A'] }, exported: false,
+    designV1: null, promptV1: null, designV2: null, promptV2: null,
+    changedFields: [], noChangeRationale: '',
     furthestIdx: STEP_ORDER.indexOf('export'),
   };
 }
@@ -75,6 +83,8 @@ function initialState() {
     step: 'landing', mbView: 'input', activeMemberId: null, editReturn: null,
     team: freshTeam(), designData: {}, part1Data: { surprise: '', spread: '', strengths: '' },
     evalData: { selected: ['A'] }, exported: false,
+    designV1: null, promptV1: null, designV2: null, promptV2: null,
+    changedFields: [], noChangeRationale: '',
     furthestIdx: 0,
   };
 }
@@ -84,11 +94,19 @@ function App() {
     new URLSearchParams(window.location.search).has('demo') ? demoState() : initialState());
   const [savedSession, setSavedSession] = useState(() => loadSession());
 
-  const { step, mbView, activeMemberId, editReturn, team, designData, part1Data, evalData, exported, furthestIdx } = state;
+  const { step, mbView, activeMemberId, editReturn, team, designData, part1Data, evalData, exported,
+    designV1, promptV1, designV2, promptV2, changedFields, noChangeRationale, furthestIdx } = state;
 
   const patch = (p) => setState(s => {
     const next = { ...s, ...p };
     next.furthestIdx = Math.max(next.furthestIdx, STEP_ORDER.indexOf(next.step));
+    // 5.2 — snapshot v1 the moment the team first enters Part 3: this is
+    // by definition the prompt they deployed and tested against. Never
+    // overwritten, whatever navigation happens afterwards.
+    if (next.step === 'evaluate' && next.designV1 == null) {
+      next.designV1 = { ...next.designData };
+      next.promptV1 = buildPromptText(next.team, next.designData);
+    }
     return next;
   });
 
@@ -156,7 +174,10 @@ function App() {
   };
 
   const handleResume = () => {
-    if (savedSession) setState({ ...initialState(), ...savedSession });
+    if (!savedSession) return;
+    const s = { ...initialState(), ...savedSession };
+    if (s.step === 'output') s.step = 'revise';  // pre-2.0 sessions
+    setState(s);
   };
 
   const handleDiscardSaved = () => {
@@ -187,6 +208,21 @@ function App() {
   };
 
   const goTo = (s) => { patch({ step: s }); window.scrollTo(0, 0); };
+
+  // 5.5 — leaving the revision screen: store v2 and compute the diff
+  // against v1 here, in one place, so no navigation path can corrupt it.
+  const handleReviseContinue = ({ rationale }) => {
+    const v1 = designV1 || {};
+    const changed = PROMPT_FIELD_KEYS().filter(k => ((designData[k] ?? '') + '') !== ((v1[k] ?? '') + ''));
+    patch({
+      designV2: { ...designData },
+      promptV2: buildPromptText(team, designData),
+      changedFields: changed,
+      noChangeRationale: (rationale || '').trim(),
+      step: 'export',
+    });
+    window.scrollTo(0, 0);
+  };
 
   // Menu entries the team has already reached (by furthest internal step).
   const reachedIds = useMemo(() => {
@@ -270,15 +306,18 @@ function App() {
             designData={designData}
             evalData={evalData}
             onChange={(d) => patch({ evalData: d })}
-            onContinue={() => goTo('output')}
+            onContinue={() => goTo('revise')}
           />
         )}
-        {step === 'output' && (
-          <PromptOutputScreen
+        {step === 'revise' && (
+          <RevisionScreen
             team={team}
             designData={designData}
+            onChange={(d) => patch({ designData: d })}
             evalData={evalData}
-            onContinue={() => goTo('export')}
+            designV1={designV1}
+            savedRationale={noChangeRationale}
+            onContinue={handleReviseContinue}
           />
         )}
         {step === 'export' && (
@@ -286,6 +325,7 @@ function App() {
             team={team}
             designData={designData}
             evalData={evalData}
+            extras={{ part1Data, designV1, promptV1, designV2, promptV2, changedFields, noChangeRationale }}
             exported={exported}
             onExported={() => patch({ exported: true })}
             onContinue={() => goTo('done')}

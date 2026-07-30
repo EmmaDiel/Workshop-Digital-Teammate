@@ -436,4 +436,4 @@ function PromptPreview({ team, designData, big }) {
   );
 }
 
-Object.assign(window, { DesignScreen, DESIGN_SECTIONS, B6_OPTIONS, PromptPreview, buildPromptLines, buildPromptText, questionFilled, countedQuestions });
+Object.assign(window, { DesignScreen, DesignQuestion, DESIGN_SECTIONS, B6_OPTIONS, PromptPreview, buildPromptLines, buildPromptText, questionFilled, countedQuestions });
