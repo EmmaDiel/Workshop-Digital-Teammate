@@ -106,6 +106,14 @@ function App() {
   const handleSaveMB = ({ type, dims }) => {
     const members = team.members.map(m => m.id === activeMemberId ? { ...m, type, dims } : m);
     const nextTeam = { ...team, members };
+    if (editReturn === 'mb-back') {
+      // Came here via "← Previous member": resume the sequence at the
+      // first member still missing results (input view, no interstitial).
+      const pending = members.find(m => !m.type);
+      if (pending) patch({ team: nextTeam, activeMemberId: pending.id, mbView: 'input', editReturn: null });
+      else patch({ team: nextTeam, step: 'profile', activeMemberId: null, editReturn: null });
+      return;
+    }
     if (editReturn) {
       patch({ team: nextTeam, step: editReturn, editReturn: null, activeMemberId: null });
       return;
@@ -120,6 +128,26 @@ function App() {
 
   const handleEditMember = (memberId) => {
     patch({ step: 'mb', mbView: 'input', activeMemberId: memberId, editReturn: 'profile' });
+  };
+
+  // "← Previous member" during the entry sequence (1.2) — reopens the
+  // previous member's saved entry via the same editReturn mechanism the
+  // Team Profile edit buttons use.
+  const handlePrevMember = () => {
+    const idx = team.members.findIndex(m => m.id === activeMemberId);
+    if (idx <= 0) return;
+    patch({ activeMemberId: team.members[idx - 1].id, mbView: 'input', editReturn: 'mb-back' });
+    window.scrollTo(0, 0);
+  };
+
+  const handleCancelEdit = () => {
+    if (editReturn === 'mb-back') {
+      const pending = team.members.find(m => !m.type);
+      if (pending) patch({ activeMemberId: pending.id, mbView: 'input', editReturn: null });
+      else patch({ step: 'profile', activeMemberId: null, editReturn: null });
+    } else {
+      patch({ step: editReturn, editReturn: null, activeMemberId: null });
+    }
   };
 
   const handleResume = () => {
@@ -209,7 +237,9 @@ function App() {
             team={team}
             member={activeMember}
             onSave={handleSaveMB}
-            onCancel={editReturn ? () => patch({ step: editReturn, editReturn: null, activeMemberId: null }) : null}
+            onPrev={(!editReturn || editReturn === 'mb-back') && team.members.findIndex(m => m.id === activeMember.id) > 0
+              ? handlePrevMember : null}
+            onCancel={editReturn ? handleCancelEdit : null}
           />
         ))}
         {step === 'profile' && (

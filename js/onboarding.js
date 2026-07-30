@@ -84,7 +84,8 @@ function LandingScreen({ savedSession, onStart, onResume, onDiscardSaved }) {
 
           <div className="tip-callout mt-6">
             <span className="tip-mark">Note</span>
-            <div>The personality test is not built into this platform — taking the official one keeps your results consistent with the research literature.</div>
+            {/* 1.1 — wording pending researcher sign-off */}
+            <div>You take the test on 16personalities.com; this platform is where you enter your results.</div>
           </div>
         </div>
       </div>
@@ -194,7 +195,7 @@ function MemberHandoffScreen({ team, nextMember, onBegin }) {
 }
 
 // === MB Input screen — individual ===
-function MBInputScreen({ team, member, onSave, onCancel }) {
+function MBInputScreen({ team, member, onSave, onPrev, onCancel }) {
   const me = member;
   const [typeCode, setTypeCode] = React.useState(me.type || '');
   const [dims, setDims] = React.useState(me.dims || { EI: 50, SN: 50, TF: 50, JP: 50, AT: 50 });
@@ -295,9 +296,15 @@ function MBInputScreen({ team, member, onSave, onCancel }) {
           </div>
 
           <div className="between">
-            {onCancel
-              ? <button className="btn-link" onClick={onCancel}>← Back without saving</button>
-              : <span />}
+            <span style={{display: 'flex', gap: 16}}>
+              {onCancel && <button className="btn-link" onClick={onCancel}>← Back without saving</button>}
+              {onPrev && (
+                <button className="btn-link" onClick={onPrev}
+                  title="Reopen the previous member's entry to correct it — their saved values stay filled in">
+                  ← Previous member
+                </button>
+              )}
+            </span>
             <div style={{textAlign: 'right'}}>
               {confirmNeutral && (
                 <div className="helper mb-2" style={{color: 'var(--accent)'}}>
