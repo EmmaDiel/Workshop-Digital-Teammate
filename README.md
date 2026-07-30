@@ -8,22 +8,7 @@ team, stress-test it, and download their results as one pseudonymised team
 file. The closing screen hands each member off to an individual Qualtrics
 survey.
 
-Live site: served by **GitHub Pages** straight from this repository — every
-file here is exactly what the browser receives. There is no build step.
-
 ---
-
-## Before your first session — one thing to configure
-
-Open **[`js/config.js`](js/config.js)** and replace the placeholder
-`QUALTRICS_URL` with your survey's anonymous link. Until you do, the closing
-screen shows a visible "Facilitator: link not configured" warning instead of
-the QR code. While you're there, adjust `EXPORT_INSTRUCTIONS` (what teams
-should do with their downloaded file).
-
-Good pre-flight check: open the site, append `?demo=1` to the URL, walk to
-the final screen and scan the QR code with your own phone.
-
 ## How a session runs
 
 1. **Team setup** — the team picks its size and receives a generated team
