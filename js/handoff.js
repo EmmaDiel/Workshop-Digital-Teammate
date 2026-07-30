@@ -108,10 +108,11 @@ function HandoffScreen({ team, designData, evalData, onRestart }) {
 
       <div className="card mt-6" style={{textAlign: 'left'}}>
         <div className="section-num">Keep building</div>
-        <h2 className="h2 mt-2 mb-4">Your final prompt — copy it into ChatGPT, Claude, or Gemini</h2>
+        <h2 className="h2 mt-2 mb-4">Your final prompt — live in your EduGenAI CustomGPT</h2>
         <PromptPreview team={team} designData={designData} big />
         <p className="helper mt-4" style={{fontSize: 13}}>
-          Bring your prompt to your next tutorial and start using it on the action plan. Remember the refinements your team noted in Part 3.
+          This is the version you deployed to <a href="https://edugenai.npuls.nl/" target="_blank" rel="noreferrer">EduGenAI</a> in
+          Part 3 — shown here for reference. Keep using your CustomGPT on the action plan in your next tutorials.
         </p>
       </div>
 

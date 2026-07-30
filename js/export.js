@@ -1,16 +1,11 @@
 // === Team export (Part 4, step 1) ===
 //
-// Produces one downloadable ZIP per team, stamped with the team code:
-//   · team_<code>.json    — canonical, analysis-ready record (schema below)
-//   · members_<code>.csv  — one row per member (personality data)
-//   · team_<code>.csv     — one row per team (design + evaluation)
-//   · summary_<code>.md   — human-readable summary
-//   · system_prompt_<code>.txt — the assembled prompt, ready to paste
-//   · data_dictionary.txt — column-by-column explanation
-//
+// Produces one downloadable file per team: team_<code>.json — the
+// canonical, complete record. A human-readable summary_<code>.md is
+// offered as an optional secondary download for facilitators.
+// Stacked CSVs for analysis are generated in bulk from the JSON files by
+// tools/collate.py; the column reference lives in docs/data-dictionary.md.
 // Everything is generated in the browser; nothing is uploaded anywhere.
-// The two CSVs are shaped so that many team files can be stacked with e.g.
-// R:  purrr::map_dfr(list.files(pattern="members_.*csv"), readr::read_csv)
 
 // ── Export data assembly ────────────────────────────────────────────────
 
@@ -98,61 +93,6 @@ function buildExportData(team, designData, evalData) {
 
 // ── File renderers ──────────────────────────────────────────────────────
 
-function csvCell(v) {
-  if (v === null || v === undefined) return '';
-  const s = String(v);
-  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-
-function toCsv(rows) {
-  const cols = Object.keys(rows[0]);
-  return [cols.join(','), ...rows.map(r => cols.map(c => csvCell(r[c])).join(','))].join('\n') + '\n';
-}
-
-function membersCsv(data) {
-  return toCsv(data.members);
-}
-
-function teamCsv(data) {
-  const row = {
-    team_code: data.team_code,
-    exported_at: data.exported_at,
-    schema_version: data.schema_version,
-    workshop_version: data.workshop_version,
-    demo: data.demo,
-    team_size: data.team_size,
-    n_members: data.n_members,
-    count_analysts: data.role_group_counts.analysts,
-    count_diplomats: data.role_group_counts.diplomats,
-    count_sentinels: data.role_group_counts.sentinels,
-    count_explorers: data.role_group_counts.explorers,
-    absent_role_groups: data.absent_role_groups.join(';'),
-    gpt_name: data.design.gpt_name,
-    b1_role: data.design.b1_role,
-    b1_human_role: data.design.b1_human_role,
-    b2_mistakes: data.design.b2_mistakes,
-    b2_limits: data.design.b2_limits,
-    b3_opener: data.design.b3_opener,
-    b4_format: data.design.b4_format,
-    b4_must_include: data.design.b4_must_include,
-    b5_tone: data.design.b5_tone,
-    b5_jargon: data.design.b5_jargon,
-    b6_primary_roles: data.design.b6_primary_roles.join(';'),
-    b6_other_role: data.design.b6_other_role,
-    eval_selected_topics: data.evaluation.selected_topics.join(';'),
-  };
-  data.evaluation.topics.forEach(t => {
-    const p = 'eval_' + t.topic_id.toLowerCase();
-    row[p + '_selected'] = t.selected;
-    row[p + '_test_prompt'] = t.test_prompt;
-    row[p + '_observation'] = t.observation;
-    row[p + '_interpretation'] = t.interpretation;
-    row[p + '_refinement'] = t.refinement;
-  });
-  row.system_prompt = data.system_prompt;
-  return toCsv([row]);
-}
-
 function summaryMd(data) {
   const L = [];
   L.push(`# Digital Teammate — Team ${data.team_code}`);
@@ -214,145 +154,6 @@ function summaryMd(data) {
   return L.join('\n');
 }
 
-function dataDictionary() {
-  return `DATA DICTIONARY — Designing Your Digital Teammate exports
-Schema version ${CONFIG.EXPORT_SCHEMA_VERSION} · workshop version ${CONFIG.WORKSHOP_VERSION}
-
-FILES
-  team_<code>.json     Canonical record. Everything below in one nested JSON.
-  members_<code>.csv   One row per team member.
-  team_<code>.csv      One row per team (design answers + evaluation).
-  summary_<code>.md    Human-readable version of the same data.
-  system_prompt_<code>.txt  The assembled CustomGPT system prompt.
-
-IDENTIFIERS
-  team_code            Generated code identifying the team (only linkage key).
-  member_id            M1..Mn — the member's number within the team. Members
-                       use "<team_code> + M<n>" in the follow-up survey.
-  No names or other personal identifiers are collected anywhere.
-
-MEMBERS (members_<code>.csv)
-  type                 Four-letter 16Personalities type, e.g. INTJ.
-  type_variant         Type incl. identity suffix, e.g. INTJ-A / INTJ-T,
-                       derived from identity_turbulent_pct (>50 → -T).
-  role_group           Analysts / Diplomats / Sentinels / Explorers.
-  *_pct columns        Position 0-100 on each dimension, named after the
-                       RIGHT pole; the left-pole share is the complement.
-                       Example: energy_extraverted_pct = 28 means the member
-                       reported "72% Introverted". 50 = not set / neutral.
-    energy_extraverted_pct    Energy:   Introverted (I=0) … Extraverted (E=100)
-    mind_intuitive_pct        Mind:     Observant  (S=0) … Intuitive  (N=100)
-    nature_feeling_pct        Nature:   Thinking   (T=0) … Feeling    (F=100)
-    tactics_prospecting_pct   Tactics:  Judging    (J=0) … Prospecting(P=100)
-    identity_turbulent_pct    Identity: Assertive  (A=0) … Turbulent  (T=100)
-
-TEAM (team_<code>.csv)
-  count_*              Members per role group.
-  absent_role_groups   Role groups with zero members ("," → ";"-separated).
-  gpt_name, b1_*..b6_* Design-canvas answers (B1 Purpose & Role … B6
-                       Reflection), free text as typed by the team.
-  b6_primary_roles     Ticked options in B6, ";"-separated ids:
-                       gaps | amplify | struct | debate | empathy | diverge.
-  eval_selected_topics Topics the team chose in Part 3 (A mandatory + 2).
-  eval_<a-d>_*         Per topic: selected (true/false), test_prompt,
-                       observation, interpretation, refinement. Text fields
-                       may be filled even when selected=false (teams can
-                       type notes before switching topics).
-  system_prompt        Assembled prompt (before Part 3 refinements, which
-                       are recorded separately in eval_*_refinement).
-  demo                 true when produced from ?demo=1 sample data — exclude
-                       from analysis.
-
-R QUICKSTART
-  library(tidyverse)
-  members <- list.files("data", pattern="^members_.*\\\\.csv$", full.names=TRUE, recursive=TRUE) |>
-    map_dfr(read_csv, col_types = cols(team_code = "c", member_id = "c"))
-  teams <- list.files("data", pattern="^team_.*\\\\.csv$", full.names=TRUE, recursive=TRUE) |>
-    map_dfr(read_csv, col_types = cols(.default = "c"))
-`;
-}
-
-// ── Minimal ZIP writer (STORE, no compression — files are tiny) ─────────
-
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-
-function crc32(bytes) {
-  let c = 0xFFFFFFFF;
-  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
-}
-
-// files: [{ name: 'path/in/zip.txt', text: '…' }] → Uint8Array of a valid zip
-function makeZip(files) {
-  const enc = new TextEncoder();
-  const now = new Date();
-  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
-  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
-
-  const localParts = [];
-  const centralParts = [];
-  let offset = 0;
-
-  for (const f of files) {
-    const name = enc.encode(f.name);
-    const data = enc.encode(f.text);
-    const crc = crc32(data);
-
-    const local = new DataView(new ArrayBuffer(30));
-    local.setUint32(0, 0x04034b50, true);
-    local.setUint16(4, 20, true);          // version needed
-    local.setUint16(6, 0x0800, true);      // flags: UTF-8 names
-    local.setUint16(8, 0, true);           // method: store
-    local.setUint16(10, dosTime, true);
-    local.setUint16(12, dosDate, true);
-    local.setUint32(14, crc, true);
-    local.setUint32(18, data.length, true);
-    local.setUint32(22, data.length, true);
-    local.setUint16(26, name.length, true);
-    local.setUint16(28, 0, true);          // extra length
-    localParts.push(new Uint8Array(local.buffer), name, data);
-
-    const central = new DataView(new ArrayBuffer(46));
-    central.setUint32(0, 0x02014b50, true);
-    central.setUint16(4, 20, true);        // version made by
-    central.setUint16(6, 20, true);        // version needed
-    central.setUint16(8, 0x0800, true);
-    central.setUint16(10, 0, true);
-    central.setUint16(12, dosTime, true);
-    central.setUint16(14, dosDate, true);
-    central.setUint32(16, crc, true);
-    central.setUint32(20, data.length, true);
-    central.setUint32(24, data.length, true);
-    central.setUint16(28, name.length, true);
-    // comment/disk/attrs all zero (30..41)
-    central.setUint32(42, offset, true);   // local header offset
-    centralParts.push(new Uint8Array(central.buffer), name);
-
-    offset += 30 + name.length + data.length;
-  }
-
-  const centralSize = centralParts.reduce((a, p) => a + p.length, 0);
-  const eocd = new DataView(new ArrayBuffer(22));
-  eocd.setUint32(0, 0x06054b50, true);
-  eocd.setUint16(8, files.length, true);
-  eocd.setUint16(10, files.length, true);
-  eocd.setUint32(12, centralSize, true);
-  eocd.setUint32(16, offset, true);
-  const all = [...localParts, ...centralParts, new Uint8Array(eocd.buffer)];
-  const out = new Uint8Array(all.reduce((a, p) => a + p.length, 0));
-  let pos = 0;
-  for (const p of all) { out.set(p, pos); pos += p.length; }
-  return out;
-}
-
 // ── Download helpers ────────────────────────────────────────────────────
 
 function downloadBlob(filename, blob) {
@@ -366,31 +167,25 @@ function downloadBlob(filename, blob) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+// The one file each team ships (6.1); the summary is an optional extra
+// a facilitator might want to read on the spot.
 function exportFiles(data) {
   const code = data.team_code;
-  return [
-    { name: `team_${code}.json`, text: JSON.stringify(data, null, 2) + '\n', mime: 'application/json', label: 'Structured data (JSON)', desc: 'The canonical record — everything in one machine-readable file.' },
-    { name: `members_${code}.csv`, text: membersCsv(data), mime: 'text/csv', label: 'Members table (CSV)', desc: 'One row per member: type + five dimension percentages.' },
-    { name: `team_${code}.csv`, text: teamCsv(data), mime: 'text/csv', label: 'Team table (CSV)', desc: 'One row per team: design answers + evaluation notes.' },
-    { name: `summary_${code}.md`, text: summaryMd(data), mime: 'text/markdown', label: 'Readable summary (Markdown)', desc: 'The same content formatted for humans.' },
-    { name: `system_prompt_${code}.txt`, text: data.system_prompt + '\n', mime: 'text/plain', label: 'System prompt (TXT)', desc: 'Ready to paste into a Custom GPT.' },
-    { name: 'data_dictionary.txt', text: dataDictionary(), mime: 'text/plain', label: 'Data dictionary', desc: 'What every column means.' },
-  ];
+  return {
+    json: { name: `team_${code}.json`, text: JSON.stringify(data, null, 2) + '\n', mime: 'application/json' },
+    summary: { name: `summary_${code}.md`, text: summaryMd(data), mime: 'text/markdown' },
+  };
 }
 
 // ── Export screen ───────────────────────────────────────────────────────
 
-function ExportScreen({ team, designData, evalData, exported, onExported, onContinue }) {
+function ExportScreen({ team, designData, evalData, extras, exported, onExported, onContinue }) {
   const [confirmSkip, setConfirmSkip] = React.useState(false);
-  const data = React.useMemo(() => buildExportData(team, designData, evalData), [team, designData, evalData]);
+  const data = React.useMemo(() => buildExportData(team, designData, evalData, extras), [team, designData, evalData, extras]);
   const files = React.useMemo(() => exportFiles(data), [data]);
-  const dateStamp = new Date().toISOString().slice(0, 10);
-  const zipName = `digital-teammate_${data.team_code}_${dateStamp}.zip`;
 
-  const downloadZip = () => {
-    const folder = `digital-teammate_${data.team_code}/`;
-    const zip = makeZip(files.map(f => ({ name: folder + f.name, text: f.text })));
-    downloadBlob(zipName, new Blob([zip], { type: 'application/zip' }));
+  const downloadJson = () => {
+    downloadBlob(files.json.name, new Blob([files.json.text], { type: files.json.mime }));
     onExported();
   };
 
@@ -441,31 +236,28 @@ function ExportScreen({ team, designData, evalData, exported, onExported, onCont
           <div className="card-head">
             <div>
               <div className="section-num">Team file</div>
-              <h2 className="h2 mt-2">Everything in one download</h2>
+              <h2 className="h2 mt-2">One file — your team's complete record</h2>
             </div>
             <span className="tag-mute mono">{data.team_code}</span>
           </div>
 
-          <div className="stack-sm">
-            {files.map(f => (
-              <div key={f.name} className="between" style={{padding: '10px 0', borderTop: '1px solid var(--line)'}}>
-                <div>
-                  <div style={{fontSize: 14, fontWeight: 500}}>{f.label}</div>
-                  <div className="helper" style={{fontSize: 12}}>{f.desc}</div>
-                </div>
-                <button className="btn-link mono" style={{fontSize: 12, flexShrink: 0, marginLeft: 16}}
-                  onClick={() => { downloadBlob(f.name, new Blob([f.text], { type: f.mime })); }}>
-                  {f.name}
-                </button>
-              </div>
-            ))}
-          </div>
+          <p className="helper" style={{fontSize: 13}}>
+            Your team profile, Part 1 discussion, design answers, testing notes and both prompt
+            versions, in a single structured file.
+          </p>
 
           <div className="mt-6" style={{textAlign: 'center'}}>
-            <button className="btn btn-primary btn-lg" onClick={downloadZip}>
-              {exported ? 'Download again (.zip)' : 'Download team file (.zip)'}
+            <button className="btn btn-primary btn-lg" onClick={downloadJson}>
+              {exported ? `Download again (${files.json.name})` : `Download team file (${files.json.name})`}
             </button>
-            {exported && <div className="helper mt-3" style={{color: 'var(--diplomats)'}}>Downloaded ✓ — check your Downloads folder for {zipName}</div>}
+            {exported && <div className="helper mt-3" style={{color: 'var(--diplomats)'}}>Downloaded ✓ — check your Downloads folder for {files.json.name}</div>}
+          </div>
+
+          <div className="mt-4" style={{textAlign: 'center'}}>
+            <button className="btn-link mono" style={{fontSize: 12}}
+              onClick={() => downloadBlob(files.summary.name, new Blob([files.summary.text], { type: files.summary.mime }))}>
+              Optional: readable summary ({files.summary.name})
+            </button>
           </div>
 
           <div className="tip-callout mt-6">
@@ -506,6 +298,5 @@ function ExportScreen({ team, designData, evalData, exported, onExported, onCont
 }
 
 Object.assign(window, {
-  buildExportData, exportFiles, makeZip, crc32, downloadBlob,
-  membersCsv, teamCsv, summaryMd, dataDictionary, ExportScreen,
+  buildExportData, exportFiles, downloadBlob, summaryMd, ExportScreen,
 });

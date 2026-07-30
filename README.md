@@ -53,31 +53,33 @@ demonstrations and facilitator training. Exports made from it are stamped
 
 ## The team export
 
-One click downloads `digital-teammate_<CODE>_<DATE>.zip` containing:
+Each team downloads **one file**: `team_<code>.json` — the complete record
+(member types and dimensions, Part 1 interpretation, design answers B1–B6,
+evaluation notes, and both prompt versions v1/v2 with the revision diff).
+A human-readable `summary_<code>.md` is offered as an optional extra.
 
-| File | Contents |
-|---|---|
-| `team_<code>.json` | Canonical record — everything in one nested JSON |
-| `members_<code>.csv` | One row per member: type, variant, role group, five dimension percentages |
-| `team_<code>.csv` | One row per team: design answers B1–B6, evaluation notes, system prompt |
-| `summary_<code>.md` | Human-readable summary |
-| `system_prompt_<code>.txt` | The assembled prompt, ready to paste |
-| `data_dictionary.txt` | Column-by-column explanation |
+To build analysis tables, collect the JSON files into a folder and run:
+
+```
+python3 tools/collate.py data/                 # → data/collated/
+python3 tools/collate.py data/ --exclude-demo  # drop ?demo=1 test exports
+```
+
+This writes stacked `members.csv` (one row per member) and `teams.csv`
+(one row per team, including the v1/v2 fields and Part 1 answers as
+columns) plus regenerated per-team summaries. It handles pilot-era
+(schema 1.0) and current (1.1) files in the same run.
 
 Dimension columns are named after the right-hand pole and hold a 0–100
 position (`energy_extraverted_pct = 28` ⇔ "72% Introverted"; 50 = not set).
-Full details in the data dictionary inside every export.
-
-Stacking many team files in R:
+Full column reference: [docs/data-dictionary.md](docs/data-dictionary.md).
 
 ```r
 library(tidyverse)
-members <- list.files("data", pattern = "^members_.*\\.csv$",
-                      full.names = TRUE, recursive = TRUE) |>
-  map_dfr(read_csv, col_types = cols(team_code = "c", member_id = "c"))
-teams <- list.files("data", pattern = "^team_.*\\.csv$",
-                    full.names = TRUE, recursive = TRUE) |>
-  map_dfr(read_csv, col_types = cols(.default = "c"))
+members <- read_csv("data/collated/members.csv",
+                    col_types = cols(team_code = "c", member_id = "c"))
+teams   <- read_csv("data/collated/teams.csv",
+                    col_types = cols(.default = "c"))
 ```
 
 ## Data protection
@@ -102,12 +104,14 @@ js/storage.js         localStorage autosave / resume / clear
 js/onboarding.js      landing, team setup, member handoff, results entry
 js/team-profile.js    Part 1
 js/design-canvas.js   Part 2 (B1–B6) + prompt builder + live preview
-js/evaluate.js        Part 3 (topics A–D) + final-prompt screen
-js/export.js          export data assembly, CSV/Markdown/ZIP writers, screen
+js/evaluate.js        Part 3 (topics A–D) + revision screen (v1/v2 capture)
+js/export.js          export data assembly (team JSON + summary), screen
 js/handoff.js         closing screen: QR code, codes, Qualtrics handoff
 js/app.js             state machine, routing, persistence wiring
 js/vendor/            react 18.3.1, react-dom, @babel/standalone, qrcode-generator (pinned, self-hosted)
 assets/               UU logo, favicon, self-hosted woff2 fonts
+docs/                 data dictionary for exports
+tools/collate.py      stack many team_*.json into members.csv / teams.csv
 scripts/serve.py      tiny local dev server
 preview.command       macOS: double-click to preview locally
 ```
