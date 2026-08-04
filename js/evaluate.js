@@ -82,7 +82,10 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
         <div>
           <Eyebrow>Part 3 · Test, evaluate & refine</Eyebrow>
           <h1 className="h-display mt-4">Stress-test your <em>teammate</em>.</h1>
+          {/* Creative-project frame, touchpoint 3 of 3. Sets the scenario teams test
+              within. The four worksheet fields below stay neutral — no creative language. */}
           <p className="lede mt-4">
+            Test your teammate on the real work of making your creative group project, not on invented examples.
             Research on human–AI collaboration identifies recurring risks regardless of how carefully you designed your tool. Topic A is mandatory; pick two of the remaining three.
           </p>
         </div>

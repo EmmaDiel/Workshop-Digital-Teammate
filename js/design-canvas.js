@@ -225,7 +225,11 @@ function DesignScreen({ team, designData, onChange, onContinue }) {
         <div>
           <Eyebrow>Part 2 · Designing the Digital Teammate</Eyebrow>
           <h1 className="h-display mt-4">Build the <em>brief</em>.</h1>
-          <p className="lede mt-4">Work through six sections together. Each maps your team's composition to a concrete design choice. Your draft system prompt updates live on the right.</p>
+          {/* Creative-project frame, touchpoint 2 of 3 — restates the setting only.
+              FIREWALL: nothing below this heading may mention creativity. The study
+              measures whether teams build creativity in unprompted, so B1–B6 labels,
+              intros, hints and placeholders must stay neutral. */}
+          <p className="lede mt-4">You're designing this teammate for your creative group project — the work your team will make together. Work through six sections; each maps your team's composition to a concrete design choice. Your draft system prompt updates live on the right.</p>
         </div>
         <div style={{textAlign: 'right'}}>
           <div className="stat" style={{textAlign:'right'}}>

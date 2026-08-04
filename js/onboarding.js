@@ -14,8 +14,12 @@ function LandingScreen({ savedSession, onStart, onResume, onDiscardSaved }) {
         <div>
           <Eyebrow>A self-guided workshop</Eyebrow>
           <h1 className="h-display mt-4">Designing Your<br/><em>Digital Teammate</em>.</h1>
+          {/* Creative-project frame, touchpoint 1 of 3. States the setting only:
+              never how to design for it — see the firewall note in design-canvas.js. */}
           <p className="lede mt-6">
-            Map your team's personality composition, then design a CustomGPT that fits your team's actual working style and gaps — not a generic chatbot.
+            You have a creative group project ahead of you — something new that your team will make together.
+            Map your team's personality composition, then design a CustomGPT to work alongside you on it: a
+            teammate shaped by how your team actually works, not a generic chatbot.
           </p>
           <div className="stat-row mt-8">
             <div className="stat">
