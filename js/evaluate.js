@@ -76,6 +76,13 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
   const activeTopic = EVAL_TOPICS.find(t => t.id === activeId);
   const isActiveSelected = selected.includes(activeId);
 
+  // A team has "worked on" a topic once any of its four worksheet fields has
+  // content. Used only to surface a reminder when they've done the work but
+  // not ticked the topic — it never selects anything on their behalf, and it
+  // never blocks navigation.
+  const WORKSHEET_KEYS = ['prompt', 'happened', 'why', 'refine'];
+  const hasNotes = (id) => WORKSHEET_KEYS.some(k => (evalData[`${id}.${k}`] || '').trim().length > 0);
+
   return (
     <div className="container-wide fade-in" data-screen-label="evaluate">
       <div className="between mb-6">
@@ -229,6 +236,24 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
             </div>
           </div>
 
+          {/* Reminder, not a gate: the team has written notes here but hasn't
+              ticked this topic. Offers the tick inline; navigation is unaffected. */}
+          {!activeTopic.mandatory && !isActiveSelected && hasNotes(activeId) && (
+            <div className="tip-callout mt-6" style={{borderColor: 'var(--accent)'}}>
+              <span className="tip-mark" style={{color: 'var(--accent)'}}>Not yet included</span>
+              <div>
+                You've written notes for Topic {activeTopic.code}, but it isn't ticked as one of your
+                two optional topics. Your notes are saved either way — ticking it just brings them
+                into the next step.
+                <div className="mt-3">
+                  <button className="btn btn-dark btn-sm" onClick={() => toggleOptional(activeId)}>
+                    Include Topic {activeTopic.code}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="between mt-8" style={{paddingTop: 24, borderTop: '1px solid var(--line)'}}>
             <button
               className="btn btn-ghost"
@@ -276,6 +301,15 @@ function EvaluateScreen({ team, designData, evalData, onChange, onContinue }) {
                       fontSize: 11, fontFamily:'var(--font-mono)', letterSpacing:'.12em', textTransform:'uppercase',
                       color: t.mandatory ? 'var(--accent)' : 'var(--ink)'
                     }}>Included</span>
+                  ) : hasNotes(t.id) ? (
+                    /* Notes written but never ticked — always visible in the
+                       sticky rail, and clicking it includes the topic. */
+                    <button type="button" onClick={() => toggleOptional(t.id)}
+                      title={`You've written notes for Topic ${t.code} — click to include it`}
+                      style={{
+                        fontSize: 11, fontFamily:'var(--font-mono)', letterSpacing:'.12em', textTransform:'uppercase',
+                        color: 'var(--accent)', textAlign: 'right', lineHeight: 1.3
+                      }}>Notes ·<br/>not included</button>
                   ) : (
                     <span style={{
                       fontSize: 11, fontFamily:'var(--font-mono)', letterSpacing:'.12em', textTransform:'uppercase',
@@ -313,8 +347,12 @@ function RevisionScreen({ team, designData, onChange, evalData, designV1, savedR
   const [needAction, setNeedAction] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
+  // Show every refinement note the team wrote — including for topics they
+  // never ticked as "included". Filtering by `selected` here used to hide a
+  // team's own notes and then tell them they hadn't written any. The tick and
+  // the text are exported as separate fields, so no signal is lost by showing
+  // both here.
   const refines = EVAL_TOPICS
-    .filter(t => (evalData.selected || ['A']).includes(t.id))
     .map(t => ({ topic: t, text: evalData[`${t.id}.refine`] || '' }))
     .filter(r => r.text.trim().length > 0);
 
